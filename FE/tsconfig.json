@@ -1,0 +1,38 @@
+{
+  "extends": "@react-native/typescript-config",
+  "compilerOptions": {
+    /* JSX / 타입 충돌 방지 */
+    "jsx": "react",
+    "skipLibCheck": true,
+
+    /* 타입 안정성 */
+    "strict": true,
+    "noImplicitAny": false,
+
+    /* Module 관련 - 에러 해결 */
+    "module": "ESNext",
+    "moduleResolution": "node",
+
+    /* import 경로 관련 */
+    "baseUrl": "./",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+
+    /* 편의 설정 */
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
+  },
+  "include": [
+    "App.tsx",
+    "src/**/*",
+    "src/types/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "babel.config.js",
+    "metro.config.js",
+    "jest.config.js",
+    "Pods"
+  ]
+}

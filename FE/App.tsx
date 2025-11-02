@@ -1,15 +1,15 @@
-/*import React from 'react';
+import React from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {StatusBar} from 'react-native';
 
 // Screens
-import HomeScreen from './FE/src/screens/HomeScreen';
-import DetectScreen from './FE/src/screens/DetectScreen';
-import ProtectScreen from './FE/src/screens/ProtectScreen';
-import WatermarkScreen from './FE/src/screens/WatermarkScreen';
-import HistoryScreen from './FE/src/screens/HistoryScreen';
-import NewsScreen from './FE/src/screens/NewsScreen';
+import HomeScreen from './src/screens/HomeScreen';
+import DetectScreen from './src/screens/DetectScreen';
+import ProtectScreen from './src/screens/ProtectScreen';
+import WatermarkScreen from './src/screens/WatermarkScreen';
+import HistoryScreen from './src/screens/HistoryScreen';
+import NewsScreen from './src/screens/NewsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -34,4 +34,3 @@ function App(): React.JSX.Element {
 }
 
 export default App;
-*/
