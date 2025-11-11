@@ -30,40 +30,49 @@ class ImageProtectionView(APIView):
         uploaded_files = serializer.validated_data['files']
         job_type = serializer.validated_data['job_type']
         
-        # ✅ FileService 사용
         file_service = FileService(request.user)
         
         media_files = []
-        file_paths = []
+        file_identifiers = []
         
         try:
-            # 각 파일 업로드
             for file in uploaded_files:
                 media_file = file_service.upload_file(
                     uploaded_file=file,
                     file_type='image',
                     purpose='protection',
-                    is_temporary=False,  # 영구 저장
-                    use_s3=False
+                    is_temporary=False,
+                    use_s3=settings.USE_S3_FOR_PROTECTION  # ✅ 환경 변수로 제어
                 )
                 media_files.append(media_file)
-                file_paths.append(
-                    os.path.join(settings.MEDIA_ROOT, media_file.file_path)
-                )
+                
+                # ✅ S3 키 또는 로컬 경로 전달
+                if media_file.storage_type == 's3':
+                    # AI 서버에 S3 키 전달
+                    file_identifiers.append({
+                        'type': 's3',
+                        's3_bucket': media_file.s3_bucket,
+                        's3_key': media_file.s3_key
+                    })
+                else:
+                    # 로컬 경로 전달
+                    file_identifiers.append({
+                        'type': 'local',
+                        'path': os.path.join(settings.MEDIA_ROOT, media_file.file_path)
+                    })
             
-            # original_files JSONB 데이터 생성
             original_files_data = [
                 {
                     'file_id': mf.file_id,
                     'file_name': mf.original_name,
                     'file_size': mf.file_size,
                     'file_path': mf.file_path,
-                    'mime_type': mf.mime_type
+                    'mime_type': mf.mime_type,
+                    'storage_type': mf.storage_type
                 }
                 for mf in media_files
             ]
             
-            # ProtectionJob 생성
             job = ProtectionJob.objects.create(
                 user=request.user,
                 job_type=job_type,
@@ -72,9 +81,9 @@ class ImageProtectionView(APIView):
                 progress_percentage=0.0
             )
             
-            # 보호 처리 (Mock 또는 실제 AI 서버)
+            # ✅ AI 서버에 파일 정보 전달
             protection_service = ProtectionService()
-            result = protection_service.protect_images(file_paths, job_type)
+            result = protection_service.protect_images(file_identifiers, job_type)
             
             if not result['success']:
                 job.job_status = 'failed'
@@ -86,7 +95,6 @@ class ImageProtectionView(APIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
             
-            # 보호된 파일 정보 저장
             protected_files_data = []
             for protected_file_info in result['protected_files']:
                 protected_files_data.append({
@@ -128,31 +136,39 @@ class VideoProtectionView(APIView):
         video = serializer.validated_data['file']
         job_type = serializer.validated_data['job_type']
         
-        # ✅ FileService 사용
         file_service = FileService(request.user)
         
         try:
-            # 파일 업로드
             media_file = file_service.upload_file(
                 uploaded_file=video,
                 file_type='video',
                 purpose='protection',
                 is_temporary=False,
-                use_s3=False
+                use_s3=True  # ✅ S3에 저장
             )
             
-            file_path = os.path.join(settings.MEDIA_ROOT, media_file.file_path)
+            # ✅ S3 키 또는 로컬 경로 전달
+            if media_file.storage_type == 's3':
+                file_identifier = {
+                    'type': 's3',
+                    's3_bucket': media_file.s3_bucket,
+                    's3_key': media_file.s3_key
+                }
+            else:
+                file_identifier = {
+                    'type': 'local',
+                    'path': os.path.join(settings.MEDIA_ROOT, media_file.file_path)
+                }
             
-            # original_files JSONB 데이터
             original_files_data = [{
                 'file_id': media_file.file_id,
                 'file_name': media_file.original_name,
                 'file_size': media_file.file_size,
                 'file_path': media_file.file_path,
-                'mime_type': media_file.mime_type
+                'mime_type': media_file.mime_type,
+                'storage_type': media_file.storage_type
             }]
             
-            # ProtectionJob 생성
             job = ProtectionJob.objects.create(
                 user=request.user,
                 job_type=job_type,
@@ -161,9 +177,8 @@ class VideoProtectionView(APIView):
                 progress_percentage=0.0
             )
             
-            # 보호 처리
             protection_service = ProtectionService()
-            result = protection_service.protect_video(file_path, job_type)
+            result = protection_service.protect_video(file_identifier, job_type)
             
             if not result['success']:
                 job.job_status = 'failed'
@@ -175,7 +190,6 @@ class VideoProtectionView(APIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
             
-            # 보호된 파일 정보 저장
             protected_file_info = result['protected_file']
             protected_files_data = [{
                 'file_name': protected_file_info['file_name'],

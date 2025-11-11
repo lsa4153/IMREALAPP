@@ -5,6 +5,8 @@ from django.conf import settings
 from django.core.files.uploadedfile import UploadedFile
 from django.utils import timezone
 from .models import MediaFile, SystemLog
+from .storage import S3Storage
+
 
 
 class FileService:
@@ -228,6 +230,83 @@ class FileService:
             elif media_file.storage_type == 's3':
                 # TODO: S3 파일 삭제
                 pass
+            
+            # DB에서 삭제
+            media_file.delete()
+        else:
+            # 논리적 삭제
+            media_file.is_deleted = True
+            media_file.deleted_at = timezone.now()
+            media_file.save()
+        
+        # 로그 기록
+        SystemLog.objects.create(
+            user=self.user,
+            log_level='info',
+            log_category='system',
+            message=f'파일 삭제: {media_file.original_name}',
+            request_data={
+                'file_id': file_id,
+                'hard_delete': hard_delete
+            }
+        )
+
+    def _save_to_s3(
+        self,
+        uploaded_file: UploadedFile,
+        filename: str,
+        purpose: str
+    ) -> tuple:
+        """S3에 파일 저장"""
+        
+        # S3 키 생성
+        s3_key = f"{purpose}/user_{self.user.user_id}/{filename}"
+        
+        # S3 업로드
+        s3_storage = S3Storage()
+        
+        # 파일 포인터를 처음으로 이동
+        uploaded_file.seek(0)
+        
+        success = s3_storage.upload(
+            file_obj=uploaded_file,
+            s3_key=s3_key,
+            content_type=uploaded_file.content_type
+        )
+        
+        if not success:
+            raise ValueError("S3 업로드에 실패했습니다.")
+        
+        # 파일 경로 (S3 URL)
+        file_path = f"https://{settings.AWS_S3_CUSTOM_DOMAIN}/{s3_key}"
+        
+        return file_path, s3_key
+    
+    def delete_file(self, file_id: int, hard_delete: bool = False):
+        """
+        파일 삭제
+        
+        Args:
+            file_id: 파일 ID
+            hard_delete: True면 물리적 삭제, False면 논리적 삭제
+        """
+        
+        media_file = self.get_file(file_id)
+        
+        if hard_delete:
+            # 물리적 파일 삭제
+            if media_file.storage_type == 'local':
+                file_full_path = os.path.join(
+                    settings.MEDIA_ROOT,
+                    media_file.file_path
+                )
+                if os.path.exists(file_full_path):
+                    os.remove(file_full_path)
+            
+            elif media_file.storage_type == 's3':
+                # ✅ S3 파일 삭제
+                s3_storage = S3Storage()
+                s3_storage.delete(media_file.s3_key)
             
             # DB에서 삭제
             media_file.delete()

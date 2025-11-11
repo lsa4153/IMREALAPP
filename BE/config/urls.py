@@ -20,6 +20,7 @@ urlpatterns = [
     path('api/zoom/', include('zoom.urls')),
     path('api/protection/', include('protection.urls')),
     path('api/reports/', include('reports.urls')),
+    path('api/files/', include('media_files.urls')),
 ]
 
 # 개발 환경에서 미디어 파일 서빙

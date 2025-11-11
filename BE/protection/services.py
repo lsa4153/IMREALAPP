@@ -9,15 +9,15 @@ class ProtectionService:
     
     def __init__(self):
         self.fastapi_url = settings.FASTAPI_URL
-        self.timeout = 600  # 10분 (보호 처리는 시간이 오래 걸림)
+        self.timeout = 600  # 10분
     
-    def protect_images(self, image_paths, job_type='both'):
+    def protect_images(self, file_identifiers, job_type='both'):
         """
         이미지 보호 처리
         
         Args:
-            image_paths: 이미지 파일 경로 리스트
-            job_type: 보호 방식 (adversarial_noise, watermark, both)
+            file_identifiers: 파일 식별자 리스트 (S3 키 또는 로컬 경로)
+            job_type: 보호 방식
         
         Returns:
             dict: 보호 처리 결과
@@ -29,32 +29,22 @@ class ProtectionService:
         if not self.check_health():
             print("⚠️ AI 서버 없음 - Mock 데이터 반환")
             return self._get_mock_protection_response(
-                image_paths,
+                file_identifiers,
                 start_time,
                 'image'
             )
         
         # 실제 AI 서버 호출
         try:
-            # 여러 파일 전송
-            files = []
-            for path in image_paths:
-                files.append(
-                    ('files', open(path, 'rb'))
-                )
-            
-            data = {'job_type': job_type}
-            
+            # ✅ S3 정보 또는 로컬 경로를 JSON으로 전달
             response = requests.post(
                 f"{self.fastapi_url}/api/protect/images",
-                files=files,
-                data=data,
+                json={
+                    'files': file_identifiers,
+                    'job_type': job_type
+                },
                 timeout=self.timeout
             )
-            
-            # 파일 핸들 닫기
-            for _, file_obj in files:
-                file_obj.close()
             
             response.raise_for_status()
             result = response.json()
@@ -81,12 +71,12 @@ class ProtectionService:
                 'processing_time': int((time.time() - start_time) * 1000)
             }
     
-    def protect_video(self, video_path, job_type='both'):
+    def protect_video(self, file_identifier, job_type='both'):
         """
         영상 보호 처리
         
         Args:
-            video_path: 영상 파일 경로
+            file_identifier: 파일 식별자 (S3 키 또는 로컬 경로)
             job_type: 보호 방식
         
         Returns:
@@ -99,23 +89,22 @@ class ProtectionService:
         if not self.check_health():
             print("⚠️ AI 서버 없음 - Mock 데이터 반환")
             return self._get_mock_protection_response(
-                [video_path],
+                [file_identifier],
                 start_time,
                 'video'
             )
         
         # 실제 AI 서버 호출
         try:
-            with open(video_path, 'rb') as f:
-                files = {'file': f}
-                data = {'job_type': job_type}
-                
-                response = requests.post(
-                    f"{self.fastapi_url}/api/protect/video",
-                    files=files,
-                    data=data,
-                    timeout=self.timeout
-                )
+            # ✅ S3 정보 또는 로컬 경로를 JSON으로 전달
+            response = requests.post(
+                f"{self.fastapi_url}/api/protect/video",
+                json={
+                    'file': file_identifier,
+                    'job_type': job_type
+                },
+                timeout=self.timeout
+            )
             
             response.raise_for_status()
             result = response.json()
@@ -142,7 +131,7 @@ class ProtectionService:
                 'processing_time': int((time.time() - start_time) * 1000)
             }
     
-    def _get_mock_protection_response(self, file_paths, start_time, file_type):
+    def _get_mock_protection_response(self, file_identifiers, start_time, file_type):
         """
         🔧 Mock 보호 처리 응답 (AI 서버 없을 때)
         """
@@ -152,9 +141,13 @@ class ProtectionService:
         
         if file_type == 'image':
             protected_files = []
-            for i, path in enumerate(file_paths):
-                # 파일명 생성
-                original_name = path.split('/')[-1]
+            for i, identifier in enumerate(file_identifiers):
+                # ✅ S3 또는 로컬 경로에서 파일명 추출
+                if identifier.get('type') == 's3':
+                    original_name = identifier['s3_key'].split('/')[-1]
+                else:
+                    original_name = identifier['path'].split('/')[-1]
+                
                 name_without_ext = '.'.join(original_name.split('.')[:-1])
                 ext = original_name.split('.')[-1]
                 timestamp = datetime.now().strftime('%Y%m%d')
@@ -162,10 +155,10 @@ class ProtectionService:
                 protected_name = f"{name_without_ext}_protected_{timestamp}.{ext}"
                 
                 protected_files.append({
-                    'original_path': path,
-                    'protected_path': path.replace(original_name, protected_name),
+                    'original_path': original_name,
+                    'protected_path': protected_name,
                     'file_name': protected_name,
-                    'file_size': 1024 * 1024  # Mock: 1MB
+                    'file_size': 1024 * 1024
                 })
             
             return {
@@ -175,7 +168,13 @@ class ProtectionService:
             }
         
         else:  # video
-            original_name = file_paths[0].split('/')[-1]
+            identifier = file_identifiers[0]
+            
+            if identifier.get('type') == 's3':
+                original_name = identifier['s3_key'].split('/')[-1]
+            else:
+                original_name = identifier['path'].split('/')[-1]
+            
             name_without_ext = '.'.join(original_name.split('.')[:-1])
             ext = original_name.split('.')[-1]
             timestamp = datetime.now().strftime('%Y%m%d')
@@ -185,10 +184,10 @@ class ProtectionService:
             return {
                 'success': True,
                 'protected_file': {
-                    'original_path': file_paths[0],
-                    'protected_path': file_paths[0].replace(original_name, protected_name),
+                    'original_path': original_name,
+                    'protected_path': protected_name,
                     'file_name': protected_name,
-                    'file_size': 50 * 1024 * 1024  # Mock: 50MB
+                    'file_size': 50 * 1024 * 1024
                 },
                 'processing_time': processing_time
             }

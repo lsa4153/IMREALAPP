@@ -1,16 +1,21 @@
 from django.urls import path
-from rest_framework.views import APIView
-from rest_framework.response import Response
+from .views import (
+    ReportSubmitView,
+    ReportListView,
+    ReportDetailView,
+    ReportUpdateStatusView
+)
 
 app_name = 'reports'
 
-class ReportListView(APIView):
-    def get(self, request):
-        return Response({"message": "신고 목록"})
-    
-    def post(self, request):
-        return Response({"message": "신고 접수"})
-
 urlpatterns = [
-    path('', ReportListView.as_view(), name='report_list'),
+    # 신고 접수
+    path('submit/', ReportSubmitView.as_view(), name='submit'),
+    
+    # 신고 조회
+    path('', ReportListView.as_view(), name='list'),
+    path('<int:pk>/', ReportDetailView.as_view(), name='detail'),
+    
+    # 신고 상태 업데이트 (관리자용)
+    path('<int:pk>/status/', ReportUpdateStatusView.as_view(), name='update_status'),
 ]

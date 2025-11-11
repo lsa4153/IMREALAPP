@@ -258,3 +258,17 @@ LOGGING = {
 
 # logs 디렉토리 생성
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)
+
+# AWS S3 설정
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
+AWS_REGION = os.getenv('AWS_REGION', 'ap-northeast-2')
+AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com'
+
+# S3 URL 만료 시간 (초)
+AWS_PRESIGNED_URL_EXPIRATION = 3600  # 1시간
+
+# S3 사용 설정
+USE_S3_FOR_PROTECTION = os.getenv('USE_S3_FOR_PROTECTION', 'False') == 'True'
+USE_S3_FOR_REPORTS = os.getenv('USE_S3_FOR_REPORTS', 'False') == 'True'
