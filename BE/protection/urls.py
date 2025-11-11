@@ -1,16 +1,19 @@
 from django.urls import path
-from rest_framework.views import APIView
-from rest_framework.response import Response
+from .views import (
+    ImageProtectionView,
+    VideoProtectionView,
+    ProtectionJobListView,
+    ProtectionJobDetailView
+)
 
 app_name = 'protection'
 
-class ProtectionJobView(APIView):
-    def get(self, request):
-        return Response({"message": "보호 작업 목록"})
-    
-    def post(self, request):
-        return Response({"message": "보호 작업 시작"})
-
 urlpatterns = [
-    path('jobs/', ProtectionJobView.as_view(), name='job_list'),
+    # 보호 처리
+    path('images/', ImageProtectionView.as_view(), name='image_protection'),
+    path('videos/', VideoProtectionView.as_view(), name='video_protection'),
+    
+    # 작업 조회
+    path('jobs/', ProtectionJobListView.as_view(), name='job_list'),
+    path('jobs/<int:pk>/', ProtectionJobDetailView.as_view(), name='job_detail'),
 ]

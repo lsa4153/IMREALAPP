@@ -2,8 +2,9 @@ from rest_framework import status, generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import Count, Q
-from django.core.files.storage import default_storage
+from django.conf import settings
 import os
+
 from .models import AnalysisRecord, FaceDetectionResult
 from .serializers import (
     AnalysisRecordSerializer,
@@ -13,6 +14,7 @@ from .serializers import (
     AnalysisStatisticsSerializer
 )
 from .services import AIModelService
+from media_files.services import FileService
 
 
 class ImageAnalysisView(APIView):
@@ -30,50 +32,68 @@ class ImageAnalysisView(APIView):
         image = serializer.validated_data['image']
         analysis_type = serializer.validated_data['analysis_type']
         
-        # 파일 저장
-        file_path = default_storage.save(
-            f'uploads/images/{image.name}',
-            image
-        )
-        full_path = default_storage.path(file_path)
+        # ✅ FileService 사용
+        file_service = FileService(request.user)
         
-        # AI 모델 분석
-        ai_service = AIModelService()
-        result = ai_service.analyze_image(full_path)
-        
-        if not result['success']:
+        try:
+            # ✅ 통합 파일 업로드
+            media_file = file_service.upload_file(
+                uploaded_file=image,
+                file_type='image',
+                purpose='detection',
+                is_temporary=True,  # 분석 후 삭제
+                use_s3=False
+            )
+            
+            # AI 분석
+            ai_service = AIModelService()
+            full_path = os.path.join(settings.MEDIA_ROOT, media_file.file_path)
+            result = ai_service.analyze_image(full_path)
+            
+            if not result['success']:
+                return Response(
+                    {'error': result['error']},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            # 분석 기록 저장
+            record = AnalysisRecord.objects.create(
+                user=request.user,
+                analysis_type=analysis_type,
+                file_name=media_file.original_name,
+                file_size=media_file.file_size,
+                file_format=media_file.file_format,
+                original_path=media_file.file_path,
+                analysis_result=result['analysis_result'],
+                confidence_score=result['confidence_score'],
+                processing_time=result['processing_time'],
+                ai_model_version=result['ai_model_version']
+            )
+            
+            # ✅ 관계 연결
+            media_file.related_model = 'AnalysisRecord'
+            media_file.related_record_id = record.record_id
+            media_file.save()
+            
+            # 얼굴 인식 결과 저장
+            if result.get('face_count', 0) > 0:
+                FaceDetectionResult.objects.create(
+                    record=record,
+                    face_count=result['face_count'],
+                    face_coordinates=result['face_coordinates'],
+                    face_quality_scores=result['face_quality_scores']
+                )
+            
             return Response(
-                {'error': result['error']},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                AnalysisRecordSerializer(record).data,
+                status=status.HTTP_201_CREATED
             )
         
-        # 분석 기록 저장
-        record = AnalysisRecord.objects.create(
-            user=request.user,
-            analysis_type=analysis_type,
-            file_name=image.name,
-            file_size=image.size,
-            file_format=image.name.split('.')[-1].lower(),
-            original_path=file_path,
-            analysis_result=result['analysis_result'],
-            confidence_score=result['confidence_score'],
-            processing_time=result['processing_time'],
-            ai_model_version=result['ai_model_version']
-        )
-        
-        # 얼굴 인식 결과 저장
-        if result.get('face_count', 0) > 0:
-            FaceDetectionResult.objects.create(
-                record=record,
-                face_count=result['face_count'],
-                face_coordinates=result['face_coordinates'],
-                face_quality_scores=result['face_quality_scores']
+        except ValueError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
             )
-        
-        return Response(
-            AnalysisRecordSerializer(record).data,
-            status=status.HTTP_201_CREATED
-        )
 
 
 class VideoAnalysisView(APIView):
@@ -90,41 +110,59 @@ class VideoAnalysisView(APIView):
         
         video = serializer.validated_data['video']
         
-        # 파일 저장
-        file_path = default_storage.save(
-            f'uploads/videos/{video.name}',
-            video
-        )
-        full_path = default_storage.path(file_path)
+        # ✅ FileService 사용
+        file_service = FileService(request.user)
         
-        # AI 모델 분석
-        ai_service = AIModelService()
-        result = ai_service.analyze_video(full_path)
-        
-        if not result['success']:
+        try:
+            # ✅ 통합 파일 업로드
+            media_file = file_service.upload_file(
+                uploaded_file=video,
+                file_type='video',
+                purpose='detection',
+                is_temporary=True,  # 분석 후 삭제
+                use_s3=False
+            )
+            
+            # AI 분석
+            ai_service = AIModelService()
+            full_path = os.path.join(settings.MEDIA_ROOT, media_file.file_path)
+            result = ai_service.analyze_video(full_path)
+            
+            if not result['success']:
+                return Response(
+                    {'error': result['error']},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            # 분석 기록 저장
+            record = AnalysisRecord.objects.create(
+                user=request.user,
+                analysis_type='video',
+                file_name=media_file.original_name,
+                file_size=media_file.file_size,
+                file_format=media_file.file_format,
+                original_path=media_file.file_path,
+                analysis_result=result['analysis_result'],
+                confidence_score=result['confidence_score'],
+                processing_time=result['processing_time'],
+                ai_model_version=result['ai_model_version']
+            )
+            
+            # ✅ 관계 연결
+            media_file.related_model = 'AnalysisRecord'
+            media_file.related_record_id = record.record_id
+            media_file.save()
+            
             return Response(
-                {'error': result['error']},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                AnalysisRecordSerializer(record).data,
+                status=status.HTTP_201_CREATED
             )
         
-        # 분석 기록 저장
-        record = AnalysisRecord.objects.create(
-            user=request.user,
-            analysis_type='video',
-            file_name=video.name,
-            file_size=video.size,
-            file_format=video.name.split('.')[-1].lower(),
-            original_path=file_path,
-            analysis_result=result['analysis_result'],
-            confidence_score=result['confidence_score'],
-            processing_time=result['processing_time'],
-            ai_model_version=result['ai_model_version']
-        )
-        
-        return Response(
-            AnalysisRecordSerializer(record).data,
-            status=status.HTTP_201_CREATED
-        )
+        except ValueError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class AnalysisRecordListView(generics.ListAPIView):
@@ -154,6 +192,30 @@ class AnalysisRecordDetailView(generics.RetrieveDestroyAPIView):
     
     def get_queryset(self):
         return AnalysisRecord.objects.filter(user=self.request.user)
+    
+    def perform_destroy(self, instance):
+        """
+        분석 기록 삭제 시 관련 파일도 삭제
+        """
+        # 관련 미디어 파일 찾기
+        from media_files.models import MediaFile
+        
+        media_files = MediaFile.objects.filter(
+            related_model='AnalysisRecord',
+            related_record_id=instance.record_id,
+            is_deleted=False
+        )
+        
+        # FileService로 파일 삭제
+        file_service = FileService(self.request.user)
+        for media_file in media_files:
+            try:
+                file_service.delete_file(media_file.file_id, hard_delete=True)
+            except:
+                pass
+        
+        # 분석 기록 삭제
+        instance.delete()
 
 
 class AnalysisStatisticsView(APIView):

@@ -1,17 +1,25 @@
 from django.urls import path
-from rest_framework.views import APIView
-from rest_framework.response import Response
+from .views import (
+    ZoomSessionStartView,
+    ZoomCaptureView,
+    ZoomSessionEndView,
+    ZoomSessionListView,
+    ZoomSessionDetailView,
+    ZoomSessionReportView
+)
 
 app_name = 'zoom'
 
-# 임시 뷰 (실제 구현 필요)
-class ZoomSessionListView(APIView):
-    def get(self, request):
-        return Response({"message": "Zoom 세션 목록"})
-    
-    def post(self, request):
-        return Response({"message": "Zoom 세션 시작"})
-
 urlpatterns = [
+    # 세션 관리
+    path('sessions/start/', ZoomSessionStartView.as_view(), name='session_start'),
+    path('sessions/<int:session_id>/end/', ZoomSessionEndView.as_view(), name='session_end'),
     path('sessions/', ZoomSessionListView.as_view(), name='session_list'),
+    path('sessions/<int:pk>/', ZoomSessionDetailView.as_view(), name='session_detail'),
+    
+    # 캡처 분석
+    path('sessions/<int:session_id>/capture/', ZoomCaptureView.as_view(), name='capture'),
+    
+    # 보고서
+    path('sessions/<int:session_id>/report/', ZoomSessionReportView.as_view(), name='report'),
 ]
