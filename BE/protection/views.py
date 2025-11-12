@@ -144,7 +144,7 @@ class VideoProtectionView(APIView):
                 file_type='video',
                 purpose='protection',
                 is_temporary=False,
-                use_s3=True  # ✅ S3에 저장
+                use_s3=settings.USE_S3_FOR_PROTECTION  # ✅ S3에 저장
             )
             
             # ✅ S3 키 또는 로컬 경로 전달
