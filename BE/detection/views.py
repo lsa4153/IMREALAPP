@@ -5,7 +5,7 @@ from django.db.models import Count, Q
 from django.conf import settings
 import os
 
-from .models import AnalysisRecord, FaceDetectionResult
+from .models import AnalysisRecord
 from .serializers import (
     AnalysisRecordSerializer,
     AnalysisRecordListSerializer,
@@ -18,7 +18,7 @@ from media_files.services import FileService
 
 
 class ImageAnalysisView(APIView):
-    """이미지 딥페이크 분석 API"""
+    """이미지 딥페이크 분석 API (단일 사람)"""
     
     def post(self, request):
         serializer = ImageAnalysisRequestSerializer(data=request.data)
@@ -64,6 +64,7 @@ class ImageAnalysisView(APIView):
                 file_size=media_file.file_size,
                 file_format=media_file.file_format,
                 original_path=media_file.file_path,
+                heatmap_path=result.get('heatmap_url'),  # ✅ 히트맵
                 analysis_result=result['analysis_result'],
                 confidence_score=result['confidence_score'],
                 processing_time=result['processing_time'],
@@ -75,19 +76,14 @@ class ImageAnalysisView(APIView):
             media_file.related_record_id = record.record_id
             media_file.save()
             
-            # 얼굴 인식 결과 저장
-            if result.get('face_count', 0) > 0:
-                FaceDetectionResult.objects.create(
-                    record=record,
-                    face_count=result['face_count'],
-                    face_coordinates=result['face_coordinates'],
-                    face_quality_scores=result['face_quality_scores']
-                )
-            
-            return Response(
-                AnalysisRecordSerializer(record).data,
-                status=status.HTTP_201_CREATED
-            )
+            # ✅ 단순화된 응답
+            return Response({
+                'record_id': record.record_id,
+                'is_deepfake': result['is_deepfake'],
+                'confidence_score': float(result['confidence_score']),
+                'analysis_result': result['analysis_result'],
+                'heatmap_url': result.get('heatmap_url')
+            }, status=status.HTTP_201_CREATED)
         
         except ValueError as e:
             return Response(
@@ -97,7 +93,7 @@ class ImageAnalysisView(APIView):
 
 
 class VideoAnalysisView(APIView):
-    """영상 딥페이크 분석 API"""
+    """영상 딥페이크 분석 API (다중 사람)"""
     
     def post(self, request):
         serializer = VideoAnalysisRequestSerializer(data=request.data)
@@ -144,6 +140,7 @@ class VideoAnalysisView(APIView):
                 original_path=media_file.file_path,
                 analysis_result=result['analysis_result'],
                 confidence_score=result['confidence_score'],
+                detection_details=result.get('detection_details', []),  # ✅ 사람별 상세 결과
                 processing_time=result['processing_time'],
                 ai_model_version=result['ai_model_version']
             )
@@ -153,10 +150,14 @@ class VideoAnalysisView(APIView):
             media_file.related_record_id = record.record_id
             media_file.save()
             
-            return Response(
-                AnalysisRecordSerializer(record).data,
-                status=status.HTTP_201_CREATED
-            )
+            # ✅ 다중 사람 분석 결과 반환
+            return Response({
+                'record_id': record.record_id,
+                'is_deepfake': result['is_deepfake'],
+                'confidence_score': float(result['confidence_score']),
+                'analysis_result': result['analysis_result'],
+                'detection_details': result.get('detection_details', [])
+            }, status=status.HTTP_201_CREATED)
         
         except ValueError as e:
             return Response(

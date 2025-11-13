@@ -1,26 +1,10 @@
 from rest_framework import serializers
-from .models import AnalysisRecord, FaceDetectionResult
-
-
-class FaceDetectionResultSerializer(serializers.ModelSerializer):
-    """얼굴 인식 결과 Serializer"""
-    
-    class Meta:
-        model = FaceDetectionResult
-        fields = [
-            'detection_id',
-            'face_count',
-            'face_coordinates',
-            'face_quality_scores',
-            'detected_at'
-        ]
-        read_only_fields = ['detection_id', 'detected_at']
+from .models import AnalysisRecord
 
 
 class AnalysisRecordSerializer(serializers.ModelSerializer):
     """분석 기록 Serializer"""
     
-    face_detections = FaceDetectionResultSerializer(many=True, read_only=True)
     analysis_type_display = serializers.CharField(
         source='get_analysis_type_display',
         read_only=True
@@ -42,12 +26,13 @@ class AnalysisRecordSerializer(serializers.ModelSerializer):
             'file_format',
             'original_path',
             'processed_path',
+            'heatmap_path',  # ✅ 히트맵 경로
             'analysis_result',
             'analysis_result_display',
             'confidence_score',
+            'detection_details',  # ✅ 다중 사람 분석 결과
             'processing_time',
             'ai_model_version',
-            'face_detections',
             'created_at',
             'updated_at'
         ]

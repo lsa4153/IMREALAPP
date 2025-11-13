@@ -16,7 +16,7 @@ from media_files.services import FileService
 
 
 class ImageProtectionView(APIView):
-    """이미지 보호 API"""
+    """이미지 보호 API - S3 URL만 반환"""
     
     def post(self, request):
         serializer = ImageProtectionRequestSerializer(data=request.data)
@@ -51,6 +51,7 @@ class ImageProtectionView(APIView):
                     # AI 서버에 S3 키 전달
                     file_identifiers.append({
                         'type': 's3',
+                        'file_id': media_file.file_id,
                         's3_bucket': media_file.s3_bucket,
                         's3_key': media_file.s3_key
                     })
@@ -58,6 +59,7 @@ class ImageProtectionView(APIView):
                     # 로컬 경로 전달
                     file_identifiers.append({
                         'type': 'local',
+                        'file_id': media_file.file_id,
                         'path': os.path.join(settings.MEDIA_ROOT, media_file.file_path)
                     })
             
@@ -95,12 +97,13 @@ class ImageProtectionView(APIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
             
+            # ✅ S3 URL 리스트만 저장
             protected_files_data = []
-            for protected_file_info in result['protected_files']:
+            for protected_info in result['protected_files']:
                 protected_files_data.append({
-                    'file_name': protected_file_info['file_name'],
-                    'file_path': protected_file_info['protected_path'],
-                    'file_size': protected_file_info['file_size']
+                    'original_file_id': protected_info['original_file_id'],
+                    's3_url': protected_info['s3_url'],  # ✅ S3 URL만!
+                    'file_name': protected_info['file_name']
                 })
             
             job.protected_files = protected_files_data
@@ -108,10 +111,11 @@ class ImageProtectionView(APIView):
             job.progress_percentage = 100.0
             job.save()
             
+            # ✅ S3 URL만 반환
             return Response({
                 'job_id': job.job_id,
                 'status': 'completed',
-                'protected_files': protected_files_data
+                'protected_files': protected_files_data  # [{'original_file_id': 1, 's3_url': '...', 'file_name': '...'}]
             }, status=status.HTTP_201_CREATED)
         
         except ValueError as e:
@@ -122,7 +126,7 @@ class ImageProtectionView(APIView):
 
 
 class VideoProtectionView(APIView):
-    """영상 보호 API"""
+    """영상 보호 API - S3 URL만 반환"""
     
     def post(self, request):
         serializer = VideoProtectionRequestSerializer(data=request.data)
@@ -151,12 +155,14 @@ class VideoProtectionView(APIView):
             if media_file.storage_type == 's3':
                 file_identifier = {
                     'type': 's3',
+                    'file_id': media_file.file_id,
                     's3_bucket': media_file.s3_bucket,
                     's3_key': media_file.s3_key
                 }
             else:
                 file_identifier = {
                     'type': 'local',
+                    'file_id': media_file.file_id,
                     'path': os.path.join(settings.MEDIA_ROOT, media_file.file_path)
                 }
             
@@ -190,22 +196,23 @@ class VideoProtectionView(APIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
             
-            protected_file_info = result['protected_file']
-            protected_files_data = [{
-                'file_name': protected_file_info['file_name'],
-                'file_path': protected_file_info['protected_path'],
-                'file_size': protected_file_info['file_size']
-            }]
+            # ✅ S3 URL만 저장
+            protected_file_data = {
+                's3_url': result['s3_url'],  # ✅ S3 URL만!
+                'file_name': result['file_name']
+            }
             
-            job.protected_files = protected_files_data
+            job.protected_files = [protected_file_data]
             job.job_status = 'completed'
             job.progress_percentage = 100.0
             job.save()
             
+            # ✅ S3 URL만 반환
             return Response({
                 'job_id': job.job_id,
                 'status': 'completed',
-                'protected_file': protected_files_data[0]
+                's3_url': protected_file_data['s3_url'],  # ✅ 다운로드 URL
+                'file_name': protected_file_data['file_name']
             }, status=status.HTTP_201_CREATED)
         
         except ValueError as e:

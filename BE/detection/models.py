@@ -35,6 +35,14 @@ class AnalysisRecord(models.Model):
     file_format = models.CharField(max_length=50, verbose_name='파일 형식')
     original_path = models.TextField(verbose_name='원본 경로')
     processed_path = models.TextField(null=True, blank=True, verbose_name='처리된 경로')
+    
+    # ✅ 히트맵 이미지 경로 추가
+    heatmap_path = models.TextField(
+        null=True, 
+        blank=True, 
+        verbose_name='히트맵 이미지 경로'
+    )
+    
     analysis_result = models.CharField(
         max_length=20,
         choices=RESULT_CHOICES,
@@ -43,8 +51,17 @@ class AnalysisRecord(models.Model):
     confidence_score = models.DecimalField(
         max_digits=5,
         decimal_places=2,
-        verbose_name='신뢰도 점수'
+        verbose_name='신뢰도 점수 (%)'
     )
+    
+    # ✅ 다중 사람 분석 결과 (영상/다중 인물용)
+    detection_details = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name='상세 탐지 결과',
+        help_text='[{"person_id": 1, "is_deepfake": true, "confidence": 95.5, "detection_image_url": "https://..."}]'
+    )
+    
     processing_time = models.IntegerField(verbose_name='처리 시간(ms)')
     ai_model_version = models.CharField(max_length=50, verbose_name='AI 모델 버전')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일시')
@@ -63,34 +80,3 @@ class AnalysisRecord(models.Model):
     
     def __str__(self):
         return f"{self.file_name} - {self.get_analysis_result_display()}"
-
-
-class FaceDetectionResult(models.Model):
-    """얼굴 인식 결과"""
-    
-    detection_id = models.BigAutoField(primary_key=True)
-    record = models.ForeignKey(
-        AnalysisRecord,
-        on_delete=models.CASCADE,
-        related_name='face_detections',
-        verbose_name='분석 기록'
-    )
-    face_count = models.IntegerField(verbose_name='얼굴 개수')
-    face_coordinates = models.JSONField(
-        verbose_name='얼굴 좌표',
-        help_text='각 얼굴의 바운딩 박스 좌표 [{"x": 0, "y": 0, "width": 100, "height": 100}]'
-    )
-    face_quality_scores = models.JSONField(
-        verbose_name='얼굴 품질 점수',
-        help_text='각 얼굴의 품질 점수 [{"face_id": 1, "quality": 0.95}]'
-    )
-    detected_at = models.DateTimeField(auto_now_add=True, verbose_name='감지일시')
-    
-    class Meta:
-        db_table = 'face_detection_results'
-        verbose_name = '얼굴 인식 결과'
-        verbose_name_plural = '얼굴 인식 결과 목록'
-        ordering = ['-detected_at']
-    
-    def __str__(self):
-        return f"{self.record.file_name} - {self.face_count}개 얼굴"

@@ -115,7 +115,7 @@ class AppSetting(models.Model):
         verbose_name='분석 품질'
     )
     zoom_capture_interval = models.IntegerField(
-        default=5, 
+        default=3, 
         verbose_name='Zoom 캡처 간격(초)'
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일시')

@@ -13,10 +13,21 @@ class AIModelService:
     
     def analyze_image(self, image_path):
         """
-        이미지 딥페이크 분석
+        이미지 딥페이크 분석 (단일 사람 가정)
         
         Args:
             image_path: 이미지 파일의 절대 경로
+        
+        Returns:
+            dict: {
+                'success': bool,
+                'is_deepfake': bool,
+                'confidence_score': float (0-100),
+                'analysis_result': str ('safe'/'suspicious'/'deepfake'),
+                'heatmap_url': str,  # 히트맵 이미지 URL
+                'ai_model_version': str,
+                'processing_time': int (ms)
+            }
         """
         
         start_time = time.time()
@@ -44,14 +55,12 @@ class AIModelService:
             return {
                 'success': True,
                 'is_deepfake': result.get('is_deepfake', False),
-                'confidence_score': result.get('confidence', 0.0),
+                'confidence_score': result.get('confidence', 0.0),  # 0-100
                 'analysis_result': self._get_analysis_result(
                     result.get('is_deepfake', False),
                     result.get('confidence', 0.0)
                 ),
-                'face_count': result.get('face_count', 0),
-                'face_coordinates': result.get('face_coordinates', []),
-                'face_quality_scores': result.get('face_quality_scores', []),
+                'heatmap_url': result.get('heatmap_url', None),
                 'ai_model_version': result.get('model_version', 'v1.0'),
                 'processing_time': processing_time
             }
@@ -72,10 +81,30 @@ class AIModelService:
     
     def analyze_video(self, video_path):
         """
-        영상 딥페이크 분석
+        영상 딥페이크 분석 (다중 사람 분석)
         
         Args:
             video_path: 영상 파일의 절대 경로
+        
+        Returns:
+            dict: {
+                'success': bool,
+                'is_deepfake': bool,  # 전체 판정
+                'confidence_score': float (0-100),  # 평균 신뢰도
+                'analysis_result': str,
+                'detection_details': [  # 사람별 상세 결과
+                    {
+                        'person_id': int,
+                        'is_deepfake': bool,
+                        'confidence': float (0-100),
+                        'detection_image_url': str,  # S3 or 로컬 URL
+                        'heatmap_url': str  # 히트맵
+                    },
+                    ...
+                ],
+                'ai_model_version': str,
+                'processing_time': int (ms)
+            }
         """
         
         start_time = time.time()
@@ -100,16 +129,17 @@ class AIModelService:
             
             processing_time = int((time.time() - start_time) * 1000)
             
+            # 전체 판정 (하나라도 딥페이크면 딥페이크)
+            detection_details = result.get('detection_details', [])
+            is_any_deepfake = any([d['is_deepfake'] for d in detection_details])
+            avg_confidence = sum([d['confidence'] for d in detection_details]) / len(detection_details) if detection_details else 0.0
+            
             return {
                 'success': True,
-                'is_deepfake': result.get('is_deepfake', False),
-                'confidence_score': result.get('confidence', 0.0),
-                'analysis_result': self._get_analysis_result(
-                    result.get('is_deepfake', False),
-                    result.get('confidence', 0.0)
-                ),
-                'frame_count': result.get('frame_count', 0),
-                'suspicious_frames': result.get('suspicious_frames', []),
+                'is_deepfake': is_any_deepfake,
+                'confidence_score': round(avg_confidence, 2),
+                'analysis_result': self._get_analysis_result(is_any_deepfake, avg_confidence),
+                'detection_details': detection_details,  # AI가 detection 이미지 URL 포함해서 반환
                 'ai_model_version': result.get('model_version', 'v1.0'),
                 'processing_time': processing_time
             }
@@ -138,25 +168,14 @@ class AIModelService:
         
         # 랜덤으로 결과 생성 (테스트용)
         is_deepfake = random.choice([True, False, False, False])  # 25% 확률로 딥페이크
-        confidence = random.uniform(75.0, 99.0)
+        confidence = random.uniform(75.0, 99.9)
         
         return {
             'success': True,
             'is_deepfake': is_deepfake,
             'confidence_score': round(confidence, 2),
             'analysis_result': self._get_analysis_result(is_deepfake, confidence),
-            'face_count': random.randint(1, 3),
-            'face_coordinates': [
-                {
-                    'x': random.randint(50, 200),
-                    'y': random.randint(50, 200),
-                    'width': random.randint(150, 300),
-                    'height': random.randint(150, 300)
-                }
-            ],
-            'face_quality_scores': [
-                {'face_id': 1, 'quality': round(random.uniform(0.8, 0.99), 2)}
-            ],
+            'heatmap_url': None,  # Mock이므로 null
             'ai_model_version': 'v1.0-mock',
             'processing_time': processing_time
         }
@@ -169,19 +188,32 @@ class AIModelService:
         
         processing_time = int((time.time() - start_time) * 1000)
         
-        is_deepfake = random.choice([True, False, False, False])
-        confidence = random.uniform(75.0, 99.0)
-        frame_count = random.randint(100, 500)
+        # 2-3명의 사람이 있다고 가정
+        person_count = random.randint(2, 3)
+        detection_details = []
+        
+        for i in range(person_count):
+            is_deepfake = random.choice([True, False, False])
+            confidence = random.uniform(75.0, 99.9)
+            
+            detection_details.append({
+                'person_id': i + 1,
+                'is_deepfake': is_deepfake,
+                'confidence': round(confidence, 2),
+                'detection_image_url': None,  # Mock이므로 null
+                'heatmap_url': None
+            })
+        
+        # 전체 판정
+        is_any_deepfake = any([d['is_deepfake'] for d in detection_details])
+        avg_confidence = sum([d['confidence'] for d in detection_details]) / len(detection_details)
         
         return {
             'success': True,
-            'is_deepfake': is_deepfake,
-            'confidence_score': round(confidence, 2),
-            'analysis_result': self._get_analysis_result(is_deepfake, confidence),
-            'frame_count': frame_count,
-            'suspicious_frames': [
-                random.randint(1, frame_count) for _ in range(3)
-            ] if is_deepfake else [],
+            'is_deepfake': is_any_deepfake,
+            'confidence_score': round(avg_confidence, 2),
+            'analysis_result': self._get_analysis_result(is_any_deepfake, avg_confidence),
+            'detection_details': detection_details,
             'ai_model_version': 'v1.0-mock',
             'processing_time': processing_time
         }
@@ -189,7 +221,7 @@ class AIModelService:
     def _get_analysis_result(self, is_deepfake, confidence):
         """분석 결과 결정"""
         if is_deepfake:
-            if confidence >= 0.8:
+            if confidence >= 80.0:
                 return 'deepfake'
             else:
                 return 'suspicious'

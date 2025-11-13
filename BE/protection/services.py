@@ -20,7 +20,17 @@ class ProtectionService:
             job_type: 보호 방식
         
         Returns:
-            dict: 보호 처리 결과
+            dict: {
+                'success': bool,
+                'protected_files': [
+                    {
+                        'original_file_id': int,
+                        's3_url': str,  # 보호된 이미지 S3 URL
+                        'file_name': str
+                    }
+                ],
+                'processing_time': int (ms)
+            }
         """
         
         start_time = time.time()
@@ -54,6 +64,7 @@ class ProtectionService:
             return {
                 'success': True,
                 'protected_files': result.get('protected_files', []),
+                # protected_files: [{'original_file_id': 1, 's3_url': 'https://...', 'file_name': '...'}, ...]
                 'processing_time': processing_time
             }
         
@@ -80,7 +91,12 @@ class ProtectionService:
             job_type: 보호 방식
         
         Returns:
-            dict: 보호 처리 결과
+            dict: {
+                'success': bool,
+                's3_url': str,  # 보호된 영상 S3 URL
+                'file_name': str,
+                'processing_time': int (ms)
+            }
         """
         
         start_time = time.time()
@@ -113,7 +129,8 @@ class ProtectionService:
             
             return {
                 'success': True,
-                'protected_file': result.get('protected_file'),
+                's3_url': result.get('s3_url'),
+                'file_name': result.get('file_name'),
                 'processing_time': processing_time
             }
         
@@ -154,11 +171,13 @@ class ProtectionService:
                 
                 protected_name = f"{name_without_ext}_protected_{timestamp}.{ext}"
                 
+                # Mock S3 URL
+                mock_s3_url = f"https://mock-bucket.s3.ap-northeast-2.amazonaws.com/protection/{protected_name}"
+                
                 protected_files.append({
-                    'original_path': original_name,
-                    'protected_path': protected_name,
-                    'file_name': protected_name,
-                    'file_size': 1024 * 1024
+                    'original_file_id': identifier.get('file_id', i),
+                    's3_url': mock_s3_url,
+                    'file_name': protected_name
                 })
             
             return {
@@ -181,14 +200,13 @@ class ProtectionService:
             
             protected_name = f"{name_without_ext}_protected_{timestamp}.{ext}"
             
+            # Mock S3 URL
+            mock_s3_url = f"https://mock-bucket.s3.ap-northeast-2.amazonaws.com/protection/{protected_name}"
+            
             return {
                 'success': True,
-                'protected_file': {
-                    'original_path': original_name,
-                    'protected_path': protected_name,
-                    'file_name': protected_name,
-                    'file_size': 50 * 1024 * 1024
-                },
+                's3_url': mock_s3_url,
+                'file_name': protected_name,
                 'processing_time': processing_time
             }
     
